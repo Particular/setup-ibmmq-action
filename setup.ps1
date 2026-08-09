@@ -115,25 +115,41 @@ if (-not $ready) {
     throw "IBM MQ did not become ready within 150s."
 }
 
-# Create a dspmq shim on PATH so consumers and CI can check queue manager
-# status the same way on both platforms — Linux (Docker directly) and
+# Create dspmq and runmqsc shims on PATH so consumers and CI can call IBM MQ
+# commands the same way on both platforms — Linux (Docker directly) and
 # Windows (Docker inside WSL). Mirrors the sqlcmd shim pattern from
 # install-sql-server-action.
-Write-Output "Creating dspmq forwarding script"
+#
+# dspmq: no stdin needed — .cmd wrapper is fine on Windows.
+# runmqsc: needs stdin — uses a .ps1 script on Windows because .cmd files
+# don't reliably forward piped stdin to wsl.exe. PowerShell's $input
+# enumerator pipes correctly to wsl.exe (verified locally).
+Write-Output "Creating dspmq and runmqsc forwarding scripts"
 $shimDir = Join-Path $Env:RUNNER_TEMP "ibmmq-shim"
 New-Item -ItemType Directory -Force -Path $shimDir | Out-Null
 
 if ($runnerOs -eq "Linux") {
-    $shimPath = Join-Path $shimDir "dspmq"
-    Set-Content -Path $shimPath -Value "#!/bin/bash`ndocker exec $ContainerName dspmq `"$@`"" -Encoding ASCII
-    & chmod +x $shimPath
+    # Bash scripts — stdin flows naturally to docker exec -i
+    $dspmqPath = Join-Path $shimDir "dspmq"
+    Set-Content -Path $dspmqPath -Value "#!/bin/bash`ndocker exec $ContainerName dspmq `"$@`"" -Encoding ASCII
+    & chmod +x $dspmqPath
+
+    $runmqscPath = Join-Path $shimDir "runmqsc"
+    Set-Content -Path $runmqscPath -Value "#!/bin/bash`ndocker exec -i $ContainerName runmqsc `"$@`"" -Encoding ASCII
+    & chmod +x $runmqscPath
 }
 elseif ($runnerOs -eq "Windows") {
-    $shimPath = Join-Path $shimDir "dspmq.cmd"
-    Set-Content -Path $shimPath -Encoding ASCII -Value "@echo off`r`nwsl.exe --distribution $wslDistribution -- docker exec $ContainerName dspmq %*"
+    # dspmq: .cmd wrapper (no stdin needed, works fine)
+    $dspmqPath = Join-Path $shimDir "dspmq.cmd"
+    Set-Content -Path $dspmqPath -Encoding ASCII -Value "@echo off`r`nwsl.exe --distribution $wslDistribution -- docker exec $ContainerName dspmq %*"
+
+    # runmqsc: .ps1 script (stdin piping via $input works correctly to wsl.exe,
+    # unlike .cmd which doesn't forward piped stdin reliably)
+    $runmqscPath = Join-Path $shimDir "runmqsc.ps1"
+    Set-Content -Path $runmqscPath -Encoding ASCII -Value "`$input | wsl.exe --distribution `$env:WSL_DISTRIBUTION -- docker exec -i $ContainerName runmqsc `$args"
 }
 
-Write-Output "Adding dspmq shim to PATH"
+Write-Output "Adding IBM MQ shims to PATH"
 $shimDir | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8 -Append
 # GITHUB_PATH only affects subsequent steps; set in current process too.
 if ($runnerOs -eq "Linux") {

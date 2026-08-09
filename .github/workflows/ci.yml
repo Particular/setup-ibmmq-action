@@ -58,37 +58,11 @@ jobs:
           Write-Host "Queue manager is running."
 
           # Test IBM MQ is functional: create a queue, verify it, delete it, verify it's gone.
-          # We write MQSC commands to a file, docker cp it into the container, and run
-          # runmqsc with input from the file — this avoids stdin piping issues through
-          # the WSL interop layer on Windows (.cmd -> wsl.exe -> docker exec -i chain
-          # doesn't reliably forward piped stdin).
-          Import-Module $Env:WSL_TOOLS_MODULE_PATH -Force
-
-          $containerName = "ibmmq"
-          $containerScriptPath = "/tmp/test-queue.mqsc"
-
-          function Run-Mqsc {
-            param([string]$Commands)
-            $tempFile = Join-Path $Env:RUNNER_TEMP "test-queue.mqsc"
-            Set-Content -Path $tempFile -Value $Commands -Encoding ASCII -NoNewline
-
-            if ($Env:WSL_DISTRIBUTION) {
-              # Windows: Docker is in WSL. Translate the host path for docker cp.
-              $wslTempFile = ConvertTo-WslPath -WindowsPath $tempFile
-              Invoke-Wsl -CheckExitCode -Command "docker cp $wslTempFile ${containerName}:${containerScriptPath}"
-              $result = Invoke-Wsl -Command "docker exec $containerName runmqsc QM1 < $containerScriptPath"
-            } else {
-              # Linux: Docker is on the host.
-              docker cp $tempFile "${containerName}:${containerScriptPath}"
-              $result = docker exec $containerName bash -c "runmqsc QM1 < $containerScriptPath"
-            }
-            return $result
-          }
-
-          # Create and verify
+          # The runmqsc shim handles platform differences (bash on Linux, .ps1 on Windows).
+          # Piped stdin flows through to docker exec -i ibmmq runmqsc on both platforms.
           Write-Host ""
           Write-Host "Creating test queue TESTQ..."
-          $createOutput = Run-Mqsc -Commands "DEFINE QLOCAL(TESTQ)`nDISPLAY QLOCAL(TESTQ)`nend"
+          $createOutput = "DEFINE QLOCAL(TESTQ)`nDISPLAY QLOCAL(TESTQ)`nend" | runmqsc QM1
           Write-Host $createOutput
 
           if ($createOutput -notmatch 'AMQ8009I') {
@@ -96,10 +70,9 @@ jobs:
           }
           Write-Host "TESTQ created and verified."
 
-          # Delete and verify gone
           Write-Host ""
           Write-Host "Deleting test queue TESTQ..."
-          $deleteOutput = Run-Mqsc -Commands "DELETE QLOCAL(TESTQ)`nDISPLAY QLOCAL(TESTQ)`nend"
+          $deleteOutput = "DELETE QLOCAL(TESTQ)`nDISPLAY QLOCAL(TESTQ)`nend" | runmqsc QM1
           Write-Host $deleteOutput
 
           if ($deleteOutput -notmatch 'AMQ8147E') {
