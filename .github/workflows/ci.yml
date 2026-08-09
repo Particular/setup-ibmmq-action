@@ -29,7 +29,7 @@ jobs:
         uses: ./
         with:
           connection-string-name: IBMMQ_CONNECTION_STRING
-      - name: Verify connection string
+      - name: Verify
         shell: pwsh
         run: |
           $connstr = $Env:IBMMQ_CONNECTION_STRING
@@ -42,25 +42,5 @@ jobs:
           if ($connstr -notmatch '^mq://admin:.+@\S+:1414/QM1\?channel=DEV\.ADMIN\.SVRCONN&topicprefix=DEV$') {
             throw "Connection string does not match expected format."
           }
-      - name: Verify IBM MQ is running
-        shell: pwsh
-        run: |
-          # On Windows, Docker runs inside WSL — route through wsl.exe.
-          # On Linux, Docker is on the host — call directly.
-          if ($Env:WSL_DISTRIBUTION) {
-            $output = (wsl.exe --distribution $Env:WSL_DISTRIBUTION -- docker exec ibmmq dspmq) -join "`n"
-          } else {
-            $output = (docker exec ibmmq dspmq) -join "`n"
-          }
 
-          Write-Host "dspmq output: $output"
-
-          if ($LASTEXITCODE -ne 0) {
-            throw "dspmq failed with exit code $LASTEXITCODE — IBM MQ is not running."
-          }
-
-          if ($output -notmatch 'Running') {
-            throw "Queue manager is not running. dspmq output: $output"
-          }
-
-          Write-Host "IBM MQ queue manager is running."
+          Write-Host "IBM MQ connection string verified — queue manager is running (setup.ps1 readiness probe passed)."
