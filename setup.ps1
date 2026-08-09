@@ -1,7 +1,7 @@
 param (
     [string]$ContainerName,
     [string]$ConnectionStringName,
-    [string]$ImageTag = "latest"
+    [string]$ImageTag = "9.4.5.1-r1"
 )
 
 $ErrorActionPreference = 'Stop'

@@ -23,7 +23,7 @@ steps:
       # Use the connection string in tests...
 ```
 
-`connection-string-name` is required. `image-tag` is optional (defaults to `latest`).
+`connection-string-name` is required. `image-tag` is optional (defaults to `9.4.5.1-r1`).
 
 ## How it works
 
@@ -44,7 +44,7 @@ This action requires `Particular/setup-wsl-action` to run first. It provisions W
 | Parameter | Required | Default | Description |
 |---|:-:|:-:|---|
 | `connection-string-name` | Yes | - | Environment variable name that will be filled with the IBM MQ connection string. |
-| `image-tag` | No | `latest` | The tag of the IBM MQ container image from `icr.io/ibm-messaging/mq`. |
+| `image-tag` | No | `9.4.5.1-r1` | The tag of the IBM MQ container image from `icr.io/ibm-messaging/mq`. |
 
 ## Connection string
 

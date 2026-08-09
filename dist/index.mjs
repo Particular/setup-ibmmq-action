@@ -31200,7 +31200,7 @@ const isPost = getState('IsPost');
 saveState('IsPost', true);
 
 const connectionStringName = getInput('connection-string-name');
-const imageTag = getInput('image-tag') || 'latest';
+const imageTag = getInput('image-tag') || '9.4.5.1-r1';
 
 async function run() {
     try {

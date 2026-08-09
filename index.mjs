@@ -12,7 +12,7 @@ const isPost = core.getState('IsPost');
 core.saveState('IsPost', true);
 
 const connectionStringName = core.getInput('connection-string-name');
-const imageTag = core.getInput('image-tag') || 'latest';
+const imageTag = core.getInput('image-tag') || '9.4.5.1-r1';
 
 async function run() {
     try {
