@@ -31199,7 +31199,7 @@ const cleanupPs1 = external_node_path_namespaceObject.resolve(index_dirname, '..
 const isPost = getState('IsPost');
 saveState('IsPost', true);
 
-const connectionStringName = getInput('connection-string-name');
+const connectionStringName = getInput('connection-string-name', { required: true });
 const imageTag = getInput('image-tag') || '9.4.5.1-r1';
 const initScript = getInput('init-script');
 
