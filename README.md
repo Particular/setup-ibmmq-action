@@ -60,13 +60,17 @@ mq://admin:<password>@<host>:1414/QM1?channel=DEV.ADMIN.SVRCONN&topicprefix=DEV
 
 ## Least-privilege testing
 
-This action does not set up least-privilege users. If your tests require a non-privileged user, run the least-privilege setup script via `docker exec` after this action:
+This action does not set up least-privilege users. If your tests require a non-privileged user, run the least-privilege setup script via `docker exec` after this action. On Windows, Docker runs inside WSL, so the command must go through WSL:
 
 ```yaml
 - name: Setup least-privilege users
   shell: pwsh
   run: |
-    docker exec ibmmq bash /path/to/setup-leastpriv-tests.sh
+    if ($Env:WSL_DISTRIBUTION) {
+      wsl.exe --distribution $Env:WSL_DISTRIBUTION -- docker exec ibmmq bash /path/to/setup-leastpriv-tests.sh
+    } else {
+      docker exec ibmmq bash /path/to/setup-leastpriv-tests.sh
+    }
 ```
 
 The script runs inside the container, so it uses the container's IBM MQ tooling directly (no host-side client needed).
