@@ -1,3 +1,3 @@
-ARG VARIANT=20
-FROM mcr.microsoft.com/vscode/devcontainers/javascript-node:0-${VARIANT}
+ARG VARIANT=24
+FROM mcr.microsoft.com/devcontainers/javascript-node:${VARIANT}
 RUN npm i -g @vercel/ncc
