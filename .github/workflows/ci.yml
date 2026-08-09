@@ -75,6 +75,8 @@ jobs:
           Write-Host ""
           Write-Host "Deleting test queue TESTQ..."
           $deleteOutput = ("DELETE QLOCAL(TESTQ)`nDISPLAY QLOCAL(TESTQ)`nend" | runmqsc QM1) -join "`n"
+          # DISPLAY after DELETE fails with the expected AMQ8147E, so runmqsc exits non-zero.
+          $LASTEXITCODE = 0
           Write-Host $deleteOutput
 
           if ($deleteOutput -notmatch 'AMQ8147E') {
