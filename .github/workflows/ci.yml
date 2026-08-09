@@ -43,16 +43,18 @@ jobs:
             throw "Connection string does not match expected format."
           }
 
-          # Verify the queue manager is running via the dspmq shim
-          $output = dspmq
-          Write-Host "dspmq output: $output"
+          # Verify the queue manager is running via the dspmq shim.
+          # Join the output to a string — PowerShell captures command output as
+          # an array, and an empty array is falsy, so -notmatch passes silently.
+          $dspmqOutput = (dspmq) -join "`n"
+          Write-Host "dspmq output: $dspmqOutput"
 
           if ($LASTEXITCODE -ne 0) {
             throw "dspmq failed with exit code $LASTEXITCODE — IBM MQ is not running."
           }
 
-          if ($output -notmatch 'Running') {
-            throw "Queue manager is not running. dspmq output: $output"
+          if ($dspmqOutput -notmatch 'Running') {
+            throw "Queue manager is not running. dspmq output: $dspmqOutput"
           }
 
           Write-Host "Queue manager is running."
@@ -62,7 +64,7 @@ jobs:
           # Piped stdin flows through to docker exec -i ibmmq runmqsc on both platforms.
           Write-Host ""
           Write-Host "Creating test queue TESTQ..."
-          $createOutput = "DEFINE QLOCAL(TESTQ)`nDISPLAY QLOCAL(TESTQ)`nend" | runmqsc QM1
+          $createOutput = ("DEFINE QLOCAL(TESTQ)`nDISPLAY QLOCAL(TESTQ)`nend" | runmqsc QM1) -join "`n"
           Write-Host $createOutput
 
           if ($createOutput -notmatch 'AMQ8009I') {
@@ -72,7 +74,7 @@ jobs:
 
           Write-Host ""
           Write-Host "Deleting test queue TESTQ..."
-          $deleteOutput = "DELETE QLOCAL(TESTQ)`nDISPLAY QLOCAL(TESTQ)`nend" | runmqsc QM1
+          $deleteOutput = ("DELETE QLOCAL(TESTQ)`nDISPLAY QLOCAL(TESTQ)`nend" | runmqsc QM1) -join "`n"
           Write-Host $deleteOutput
 
           if ($deleteOutput -notmatch 'AMQ8147E') {

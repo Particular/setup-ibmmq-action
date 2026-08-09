@@ -83,30 +83,32 @@ else {
     throw "$runnerOs not supported"
 }
 
-# Wait for IBM MQ to be ready. The dspmq command is IBM MQ's built-in queue
-# manager status check — it returns 0 when the queue manager is running.
-# We poll via docker exec because the host doesn't have IBM MQ client tooling.
+# Wait for IBM MQ to be ready. The dspmq command shows queue manager status —
+# but returns exit code 0 even when the status is "Starting", not "Running".
+# We must check the actual output for "Running", not just the exit code,
+# otherwise runmqsc will fail with "queue manager does not exist" because
+# the queue manager isn't accepting connections yet.
 Write-Output "::group::Waiting for IBM MQ to be ready"
 $ready = $false
 for ($i = 1; $i -le 30; $i++) {
     Write-Output "Attempt $i/30 to check IBM MQ readiness..."
 
     if ($runnerOs -eq "Linux") {
-        docker exec $ContainerName dspmq 2>$null
-        $ok = $LASTEXITCODE -eq 0
+        $dspmqOutput = (docker exec $ContainerName dspmq 2>$null) -join "`n"
+        $ok = ($LASTEXITCODE -eq 0) -and ($dspmqOutput -match 'Running')
     }
     else {
-        $result = Invoke-Wsl -Distribution $wslDistribution -Command "docker exec $ContainerName dspmq 2>/dev/null"
-        $ok = $LASTEXITCODE -eq 0
+        $dspmqOutput = (Invoke-Wsl -Distribution $wslDistribution -Command "docker exec $ContainerName dspmq 2>/dev/null") -join "`n"
+        $ok = ($LASTEXITCODE -eq 0) -and ($dspmqOutput -match 'Running')
     }
 
     if ($ok) {
-        Write-Output "  - IBM MQ is ready"
+        Write-Output "  - IBM MQ is ready ($dspmqOutput)"
         $ready = $true
         break
     }
 
-    Write-Output "  - Not ready, sleeping for 5s"
+    Write-Output "  - Not ready (status: $dspmqOutput), sleeping for 5s"
     Start-Sleep -seconds 5
 }
 Write-Output "::endgroup::"
