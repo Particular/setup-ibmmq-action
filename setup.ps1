@@ -115,6 +115,34 @@ if (-not $ready) {
     throw "IBM MQ did not become ready within 150s."
 }
 
+# Create a `dspmq` shim on PATH so consumers and CI can verify the queue
+# manager is running the same way on both platforms — Linux (Docker directly)
+# and Windows (Docker inside WSL). Mirrors the sqlcmd shim pattern from
+# install-sql-server-action.
+Write-Output "Creating dspmq forwarding script"
+$shimDir = Join-Path $Env:RUNNER_TEMP "ibmmq-shim"
+New-Item -ItemType Directory -Force -Path $shimDir | Out-Null
+
+if ($runnerOs -eq "Linux") {
+    $shimPath = Join-Path $shimDir "dspmq"
+    Set-Content -Path $shimPath -Value "#!/bin/bash`ndocker exec $ContainerName dspmq \"\$@\"" -Encoding ASCII
+    & chmod +x $shimPath
+}
+elseif ($runnerOs -eq "Windows") {
+    $shimPath = Join-Path $shimDir "dspmq.cmd"
+    Set-Content -Path $shimPath -Encoding ASCII -Value "@echo off`r`nwsl.exe --distribution $wslDistribution -- docker exec $ContainerName dspmq %*"
+}
+
+Write-Output "Adding dspmq shim to PATH"
+$shimDir | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8 -Append
+# GITHUB_PATH only affects subsequent steps; the export below makes it available
+# in this same process for the connection string section if needed.
+if ($runnerOs -eq "Linux") {
+    $Env:PATH = "$shimDir:$Env:PATH"
+} else {
+    $Env:PATH = "$shimDir;$Env:PATH"
+}
+
 # Export the connection string. Uses the admin user with the generated password.
 # The channel (DEV.ADMIN.SVRCONN) and topic prefix (DEV) are the IBM MQ default
 # developer configuration values.

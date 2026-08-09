@@ -43,4 +43,17 @@ jobs:
             throw "Connection string does not match expected format."
           }
 
-          Write-Host "IBM MQ connection string verified — queue manager is running (setup.ps1 readiness probe passed)."
+          # The action puts a dspmq shim on PATH that works the same way on
+          # both platforms — Linux (Docker directly) and Windows (Docker in WSL).
+          $output = dspmq
+          Write-Host "dspmq output: $output"
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "dspmq failed with exit code $LASTEXITCODE — IBM MQ is not running."
+          }
+
+          if ($output -notmatch 'Running') {
+            throw "Queue manager is not running. dspmq output: $output"
+          }
+
+          Write-Host "IBM MQ queue manager is running."
