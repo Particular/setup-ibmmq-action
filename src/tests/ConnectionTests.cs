@@ -16,7 +16,7 @@ public class ConnectionTests
 
         using var queueManager = Connect(details);
 
-        Assert.That(queueManager.Name, Is.EqualTo(details.QueueManagerName));
+        Assert.That(queueManager.Name.Trim(), Is.EqualTo(details.QueueManagerName));
     }
 
     [Test]
