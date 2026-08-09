@@ -176,15 +176,25 @@ if ($InitScript) {
         throw "Init script not found: $InitScript"
     }
 
-    # Pipe the script content into bash inside the container via stdin — avoids
-    # host-to-container path translation on Windows (docker runs inside WSL).
-    # Normalize CRLF in case the consumer repo lacks .gitattributes.
+    # Copy into the container via docker cp and run with bash — no stdin piping, so no CRLF.
+    # Normalize to LF first: scripts may be checked out with CRLF on Windows.
     $script = (Get-Content -LiteralPath $InitScript -Raw) -replace "`r`n", "`n"
+    $hostScriptPath = Join-Path $Env:RUNNER_TEMP "init-script.sh"
+    [IO.File]::WriteAllText($hostScriptPath, $script)
+    $containerScriptPath = "/tmp/init-script.sh"
+
     if ($runnerOs -eq "Linux") {
-        $script | docker exec -i $ContainerName bash -s
+        docker cp $hostScriptPath "${ContainerName}:${containerScriptPath}"
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to copy init script into the container"
+        }
+        docker exec -u 0 $ContainerName bash $containerScriptPath
     }
     else {
-        $script | wsl.exe --distribution $wslDistribution -- docker exec -i $ContainerName bash -s
+        # ConvertTo-WslPath maps the Windows path to /mnt/<drive>/ for Docker inside WSL.
+        $wslScriptPath = ConvertTo-WslPath -WindowsPath $hostScriptPath
+        Invoke-Wsl -Distribution $wslDistribution -CheckExitCode -Command "docker cp '$wslScriptPath' '${ContainerName}:${containerScriptPath}'"
+        Invoke-Wsl -Distribution $wslDistribution -CheckExitCode -Command "docker exec -u 0 $ContainerName bash $containerScriptPath"
     }
     if ($LASTEXITCODE -ne 0) {
         throw "Init script $InitScript failed with exit code $LASTEXITCODE"
