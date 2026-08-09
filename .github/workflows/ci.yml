@@ -86,3 +86,11 @@ jobs:
 
           Write-Host ""
           Write-Host "IBM MQ is fully functional — queue create/delete verified."
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v5.2.0
+        with:
+          dotnet-version: 10.0.x
+      - name: Build
+        run: dotnet build src --configuration Release
+      - name: Run tests
+        uses: Particular/run-tests-action@v1.7.0
