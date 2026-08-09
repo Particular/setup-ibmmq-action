@@ -1,0 +1,45 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+  workflow_dispatch:
+jobs:
+  ci:
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        include:
+          - os: windows-latest
+            name: Windows
+          - os: ubuntu-latest
+            name: Linux
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup WSL
+        uses: Particular/setup-wsl-action@v1.1.0
+      - name: Run
+        uses: ./
+        with:
+          connection-string-name: IBMMQ_CONNECTION_STRING
+      - name: Check result
+        shell: pwsh
+        run: |
+          $connstr = $Env:IBMMQ_CONNECTION_STRING
+          Write-Host "Connection String: $connstr"
+
+          if (-not $connstr) {
+            throw "Environment variable 'IBMMQ_CONNECTION_STRING' not set."
+          }
+
+          # Verify the connection string has the expected format
+          if ($connstr -notmatch '^mq://admin:.+@\S+:1414/QM1\?channel=DEV\.ADMIN\.SVRCONN&topicprefix=DEV$') {
+            throw "Connection string does not match expected format."
+          }
