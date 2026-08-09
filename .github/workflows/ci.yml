@@ -43,8 +43,7 @@ jobs:
             throw "Connection string does not match expected format."
           }
 
-          # The action puts a dspmq shim on PATH that works the same way on
-          # both platforms — Linux (Docker directly) and Windows (Docker in WSL).
+          # Verify the queue manager is running via the dspmq shim
           $output = dspmq
           Write-Host "dspmq output: $output"
 
@@ -56,4 +55,33 @@ jobs:
             throw "Queue manager is not running. dspmq output: $output"
           }
 
-          Write-Host "IBM MQ queue manager is running."
+          Write-Host "Queue manager is running."
+
+          # Create a test queue, verify it exists, delete it, verify it's gone.
+          # Uses the runmqsc shim (forwards stdin to docker exec -i ibmmq runmqsc).
+          Write-Host ""
+          Write-Host "Creating test queue TESTQ..."
+
+          $createOutput = "DEFINE QLOCAL(TESTQ)`nDISPLAY QLOCAL(TESTQ)`nend" | runmqsc QM1
+          Write-Host $createOutput
+
+          if ($createOutput -notmatch 'AMQ8009I') {
+            throw "Failed to create or display TESTQ. runmqsc output: $createOutput"
+          }
+
+          Write-Host "TESTQ created and verified."
+
+          Write-Host ""
+          Write-Host "Deleting test queue TESTQ..."
+
+          $deleteOutput = "DELETE QLOCAL(TESTQ)`nDISPLAY QLOCAL(TESTQ)`nend" | runmqsc QM1
+          Write-Host $deleteOutput
+
+          # After deletion, DISPLAY QLOCAL(TESTQ) should fail with AMQ8147E (queue not found)
+          if ($deleteOutput -notmatch 'AMQ8147E') {
+            throw "TESTQ was not deleted or still exists. runmqsc output: $deleteOutput"
+          }
+
+          Write-Host "TESTQ deleted and verified gone."
+          Write-Host ""
+          Write-Host "IBM MQ is fully functional — queue create/delete verified."
