@@ -123,10 +123,9 @@ if (-not $ready) {
 # Windows (Docker inside WSL). Mirrors the sqlcmd shim pattern from
 # install-sql-server-action.
 #
-# dspmq: no stdin needed — .cmd wrapper is fine on Windows.
-# runmqsc: needs stdin — uses a .ps1 script on Windows because .cmd files
-# don't reliably forward piped stdin to wsl.exe. PowerShell's $input
-# enumerator pipes correctly to wsl.exe (verified locally).
+# On Windows the shims route through `bash -c` with each argument quoted:
+# wsl.exe re-parses argv as a shell command line, so an unquoted argument with
+# parentheses or other shell-special characters would cause a syntax error.
 Write-Output "Creating dspmq and runmqsc forwarding scripts"
 $shimDir = Join-Path $Env:RUNNER_TEMP "ibmmq-shim"
 New-Item -ItemType Directory -Force -Path $shimDir | Out-Null
@@ -142,14 +141,19 @@ if ($runnerOs -eq "Linux") {
     & chmod +x $runmqscPath
 }
 elseif ($runnerOs -eq "Windows") {
-    # dspmq: .cmd wrapper (no stdin needed, works fine)
-    $dspmqPath = Join-Path $shimDir "dspmq.cmd"
-    Set-Content -Path $dspmqPath -Encoding ASCII -Value "@echo off`r`nwsl.exe --distribution $wslDistribution -- docker exec $ContainerName dspmq %*"
+    $dspmqPath = Join-Path $shimDir "dspmq.ps1"
+    Set-Content -Path $dspmqPath -Encoding ASCII -Value @"
+`$quoted = (`$args | ForEach-Object { "'" + (`$_ -replace "'", "'\''") + "'" }) -join ' '
+`$command = "docker exec $ContainerName dspmq `$quoted"
+wsl.exe --distribution `$env:WSL_DISTRIBUTION --user root -- bash -c `$command
+"@
 
-    # runmqsc: .ps1 script (stdin piping via $input works correctly to wsl.exe,
-    # unlike .cmd which doesn't forward piped stdin reliably)
     $runmqscPath = Join-Path $shimDir "runmqsc.ps1"
-    Set-Content -Path $runmqscPath -Encoding ASCII -Value "`$input | wsl.exe --distribution `$env:WSL_DISTRIBUTION -- docker exec -i $ContainerName runmqsc `$args"
+    Set-Content -Path $runmqscPath -Encoding ASCII -Value @"
+`$quoted = (`$args | ForEach-Object { "'" + (`$_ -replace "'", "'\''") + "'" }) -join ' '
+`$command = "docker exec -i $ContainerName runmqsc `$quoted"
+`$input | wsl.exe --distribution `$env:WSL_DISTRIBUTION --user root -- bash -c `$command
+"@
 }
 
 Write-Output "Adding IBM MQ shims to PATH"
