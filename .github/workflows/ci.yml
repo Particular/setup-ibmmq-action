@@ -29,6 +29,7 @@ jobs:
         uses: ./
         with:
           connection-string-name: IBMMQ_CONNECTION_STRING
+          init-script: .github/workflows/init-test.sh
       - name: Verify
         shell: pwsh
         run: |
@@ -83,6 +84,15 @@ jobs:
             throw "TESTQ was not deleted or still exists. runmqsc output: $deleteOutput"
           }
           Write-Host "TESTQ deleted and verified gone."
+
+          Write-Host ""
+          Write-Host "Verifying queue created by init script..."
+          $initOutput = ("DISPLAY QLOCAL(INIT.TEST.QUEUE)`nend" | runmqsc QM1) -join "`n"
+
+          if ($initOutput -notmatch 'AMQ8409I') {
+            throw "Queue INIT.TEST.QUEUE from init script not found. runmqsc output: $initOutput"
+          }
+          Write-Host "INIT.TEST.QUEUE created by init script verified."
 
           Write-Host ""
           Write-Host "IBM MQ is fully functional — queue create/delete verified."

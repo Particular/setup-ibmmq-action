@@ -8,6 +8,9 @@ inputs:
     description: The tag of the IBM MQ container image.
     required: false
     default: "9.4.5.1-r1"
+  init-script:
+    description: The path to a bash script to execute inside the container once IBM MQ is ready.
+    required: false
 runs:
   using: node24
   main: dist/index.mjs

@@ -23,7 +23,7 @@ steps:
       # Use the connection string in tests...
 ```
 
-`connection-string-name` is required. `image-tag` is optional (defaults to `9.4.5.1-r1`).
+`connection-string-name` is required. `image-tag` is optional (defaults to `9.4.5.1-r1`), `init-script` is optional.
 
 ## How it works
 
@@ -45,6 +45,7 @@ This action requires `Particular/setup-wsl-action` to run first. It provisions W
 |---|:-:|:-:|---|
 | `connection-string-name` | Yes | - | Environment variable name that will be filled with the IBM MQ connection string. |
 | `image-tag` | No | `9.4.5.1-r1` | The tag of the IBM MQ container image from `icr.io/ibm-messaging/mq`. |
+| `init-script` | No | - | Path to a bash script that is executed inside the container once IBM MQ is ready. |
 
 ## Connection string
 
@@ -60,20 +61,18 @@ mq://admin:<password>@<host>:1414/QM1?channel=DEV.ADMIN.SVRCONN&topicprefix=DEV
 
 ## Least-privilege testing
 
-This action does not set up least-privilege users. If your tests require a non-privileged user, run the least-privilege setup script via `docker exec` after this action. On Windows, Docker runs inside WSL, so the command must go through WSL:
+This action does not set up least-privilege users. If your tests require a non-privileged user, provide an `init-script` that sets them up. The script runs inside the container with the container's IBM MQ tooling (e.g. `runmqsc`, `useradd`) and no host-side client or Docker knowledge is needed:
 
 ```yaml
-- name: Setup least-privilege users
-  shell: pwsh
-  run: |
-    if ($Env:WSL_DISTRIBUTION) {
-      wsl.exe --distribution $Env:WSL_DISTRIBUTION -- docker exec ibmmq bash /path/to/setup-leastpriv-tests.sh
-    } else {
-      docker exec ibmmq bash /path/to/setup-leastpriv-tests.sh
-    }
+steps:
+  - name: Setup IBM MQ
+    uses: Particular/setup-ibmmq-action@v1.0.0
+    with:
+      connection-string-name: IBMMQ_CONNECTION_STRING
+      init-script: .github/workflows/setup-leastpriv-tests.sh
 ```
 
-The script runs inside the container, so it uses the container's IBM MQ tooling directly (no host-side client needed).
+On Windows runners the script is piped through WSL into the container, so the script itself works unchanged on both platforms — no `wsl.exe` branching required.
 
 ## Cleanup
 

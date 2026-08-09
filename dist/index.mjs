@@ -31201,6 +31201,7 @@ saveState('IsPost', true);
 
 const connectionStringName = getInput('connection-string-name');
 const imageTag = getInput('image-tag') || '9.4.5.1-r1';
+const initScript = getInput('init-script');
 
 async function run() {
     try {
@@ -31217,7 +31218,8 @@ async function run() {
                 '-File', setupPs1,
                 '-ContainerName', containerName,
                 '-ConnectionStringName', connectionStringName,
-                '-ImageTag', imageTag
+                '-ImageTag', imageTag,
+                '-InitScript', initScript
             ]);
         } else {
             console.log('Running cleanup');

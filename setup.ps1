@@ -1,7 +1,8 @@
 param (
     [string]$ContainerName,
     [string]$ConnectionStringName,
-    [string]$ImageTag = "9.4.5.1-r1"
+    [string]$ImageTag = "9.4.5.1-r1",
+    [string]$InitScript = ""
 )
 
 $ErrorActionPreference = 'Stop'
@@ -167,3 +168,27 @@ $connectionString = "mq://admin:${adminPassword}@${ipAddress}:${port}/${queueMan
 
 Write-Output "Setting environment variable $ConnectionStringName to IBM MQ connection string..."
 Export-Env -Name $ConnectionStringName -Value $connectionString
+
+if ($InitScript) {
+    Write-Output "::group::Running init script $InitScript"
+
+    if (-not (Test-Path -LiteralPath $InitScript)) {
+        throw "Init script not found: $InitScript"
+    }
+
+    # Pipe the script content into bash inside the container via stdin — avoids
+    # host-to-container path translation on Windows (docker runs inside WSL).
+    # Normalize CRLF in case the consumer repo lacks .gitattributes.
+    $script = (Get-Content -LiteralPath $InitScript -Raw) -replace "`r`n", "`n"
+    if ($runnerOs -eq "Linux") {
+        $script | docker exec -i $ContainerName bash -s
+    }
+    else {
+        $script | wsl.exe --distribution $wslDistribution -- docker exec -i $ContainerName bash -s
+    }
+    if ($LASTEXITCODE -ne 0) {
+        throw "Init script $InitScript failed with exit code $LASTEXITCODE"
+    }
+
+    Write-Output "::endgroup::"
+}
