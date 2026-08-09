@@ -115,33 +115,25 @@ if (-not $ready) {
     throw "IBM MQ did not become ready within 150s."
 }
 
-# Create dspmq and runmqsc shims on PATH so consumers and CI can call IBM MQ
-# commands the same way on both platforms — Linux (Docker directly) and
+# Create a dspmq shim on PATH so consumers and CI can check queue manager
+# status the same way on both platforms — Linux (Docker directly) and
 # Windows (Docker inside WSL). Mirrors the sqlcmd shim pattern from
-# install-sql-server-action. The runmqsc shim uses -i so it forwards stdin
-# (runmqsc reads commands from stdin).
-Write-Output "Creating dspmq and runmqsc forwarding scripts"
+# install-sql-server-action.
+Write-Output "Creating dspmq forwarding script"
 $shimDir = Join-Path $Env:RUNNER_TEMP "ibmmq-shim"
 New-Item -ItemType Directory -Force -Path $shimDir | Out-Null
 
 if ($runnerOs -eq "Linux") {
-    $dspmqPath = Join-Path $shimDir "dspmq"
-    Set-Content -Path $dspmqPath -Value "#!/bin/bash`ndocker exec $ContainerName dspmq `"$@`"" -Encoding ASCII
-    & chmod +x $dspmqPath
-
-    $runmqscPath = Join-Path $shimDir "runmqsc"
-    Set-Content -Path $runmqscPath -Value "#!/bin/bash`ndocker exec -i $ContainerName runmqsc `"$@`"" -Encoding ASCII
-    & chmod +x $runmqscPath
+    $shimPath = Join-Path $shimDir "dspmq"
+    Set-Content -Path $shimPath -Value "#!/bin/bash`ndocker exec $ContainerName dspmq `"$@`"" -Encoding ASCII
+    & chmod +x $shimPath
 }
 elseif ($runnerOs -eq "Windows") {
-    $dspmqPath = Join-Path $shimDir "dspmq.cmd"
-    Set-Content -Path $dspmqPath -Encoding ASCII -Value "@echo off`r`nwsl.exe --distribution $wslDistribution -- docker exec $ContainerName dspmq %*"
-
-    $runmqscPath = Join-Path $shimDir "runmqsc.cmd"
-    Set-Content -Path $runmqscPath -Encoding ASCII -Value "@echo off`r`nwsl.exe --distribution $wslDistribution -- docker exec -i $ContainerName runmqsc %*"
+    $shimPath = Join-Path $shimDir "dspmq.cmd"
+    Set-Content -Path $shimPath -Encoding ASCII -Value "@echo off`r`nwsl.exe --distribution $wslDistribution -- docker exec $ContainerName dspmq %*"
 }
 
-Write-Output "Adding IBM MQ shims to PATH"
+Write-Output "Adding dspmq shim to PATH"
 $shimDir | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8 -Append
 # GITHUB_PATH only affects subsequent steps; set in current process too.
 if ($runnerOs -eq "Linux") {
