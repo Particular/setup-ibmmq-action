@@ -25,6 +25,12 @@ $runnerOs = $Env:RUNNER_OS ?? "Linux"
 $adminPassword = [guid]::NewGuid().ToString()
 Write-Output "::add-mask::$adminPassword"
 
+# Validate the image tag — it's user-controlled and interpolated into docker commands.
+# Docker tags: max 128 chars, alphanumeric + _ . -, must start with alphanumeric or _.
+if ($ImageTag -notmatch '^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$') {
+    throw "image-tag must be a valid Docker image tag (alphanumeric, underscore, period, hyphen; max 128 chars). Got: $ImageTag"
+}
+
 $queueManagerName = "QM1"
 $image = "icr.io/ibm-messaging/mq:$ImageTag"
 $port = 1414
