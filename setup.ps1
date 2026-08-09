@@ -54,15 +54,24 @@ elseif ($runnerOs -eq "Windows") {
 
     Write-Output "WSL address: $ipAddress"
 
-    Invoke-Wsl -Distribution $wslDistribution -CheckExitCode -Command @"
-docker run --name $ContainerName --detach --restart unless-stopped \
-  --publish ${port}:${port} --publish 9443:9443 \
-  --health-cmd "dspmq" --health-interval 10s --health-timeout 5s --health-retries 10 --health-start-period 30s \
-  -e LICENSE=accept -e MQ_QMGR_NAME=$queueManagerName -e MQ_ADMIN_PASSWORD=$adminPassword \
-  $image
-"@
+    # Use array splatting to avoid WSL interop quoting issues — never pass
+    # multi-line commands with backslash continuations through wsl.exe.
+    $dockerArgs = @(
+        "run", "--name", $ContainerName, "--detach", "--restart", "unless-stopped",
+        "--publish", "${port}:${port}", "--publish", "9443:9443",
+        "--health-cmd", "dspmq", "--health-interval", "10s", "--health-timeout", "5s",
+        "--health-retries", "10", "--health-start-period", "30s",
+        "-e", "LICENSE=accept",
+        "-e", "MQ_QMGR_NAME=$queueManagerName",
+        "-e", "MQ_ADMIN_PASSWORD=$adminPassword",
+        $image
+    )
+    & wsl.exe --distribution $wslDistribution -- docker @dockerArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to start IBM MQ container in WSL"
+    }
 
-    Invoke-Wsl -Distribution $wslDistribution -Command "docker ps --filter name=$ContainerName"
+    & wsl.exe --distribution $wslDistribution -- docker ps --filter "name=$ContainerName"
 }
 else {
     throw "$runnerOs not supported"
