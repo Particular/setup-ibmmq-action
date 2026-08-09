@@ -67,7 +67,7 @@ jobs:
           $createOutput = ("DEFINE QLOCAL(TESTQ)`nDISPLAY QLOCAL(TESTQ)`nend" | runmqsc QM1) -join "`n"
           Write-Host $createOutput
 
-          if ($createOutput -notmatch 'AMQ8009I') {
+          if ($createOutput -notmatch 'AMQ8409I') {
             throw "Failed to create or display TESTQ. runmqsc output: $createOutput"
           }
           Write-Host "TESTQ created and verified."
