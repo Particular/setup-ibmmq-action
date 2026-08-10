@@ -31,7 +31,7 @@ jobs:
           connection-string-name: IBMMQ_CONNECTION_STRING
           init-script: .github/workflows/init-test.sh
       - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v5.2.0
+        uses: actions/setup-dotnet@v6.0.0
         with:
           dotnet-version: 10.0.x
       - name: Build
