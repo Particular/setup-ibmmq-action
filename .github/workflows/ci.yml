@@ -1,0 +1,112 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+  workflow_dispatch:
+jobs:
+  ci:
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        include:
+          - os: windows-latest
+            name: Windows
+          - os: ubuntu-latest
+            name: Linux
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup WSL
+        uses: Particular/setup-wsl-action@v1.2.0
+      - name: Run
+        uses: ./
+        with:
+          connection-string-name: IBMMQ_CONNECTION_STRING
+          init-script: .github/workflows/init-test.sh
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v5.2.0
+        with:
+          dotnet-version: 10.0.x
+      - name: Build
+        id: build
+        background: true
+        run: dotnet build src --configuration Release
+      - name: Verify
+        id: verify
+        background: true
+        shell: pwsh
+        run: |
+          $connstr = $Env:IBMMQ_CONNECTION_STRING
+          Write-Host "Connection String: $connstr"
+
+          if (-not $connstr) {
+            throw "Environment variable 'IBMMQ_CONNECTION_STRING' not set."
+          }
+
+          if ($connstr -notmatch '^mq://admin:.+@\S+:1414/QM1\?channel=DEV\.ADMIN\.SVRCONN&topicprefix=DEV$') {
+            throw "Connection string does not match expected format."
+          }
+
+          # Verify the queue manager is running via the dspmq shim.
+          # Join the output to a string — PowerShell captures command output as
+          # an array, and an empty array is falsy, so -notmatch passes silently.
+          $dspmqOutput = (dspmq) -join "`n"
+          Write-Host "dspmq output: $dspmqOutput"
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "dspmq failed with exit code $LASTEXITCODE — IBM MQ is not running."
+          }
+
+          if ($dspmqOutput -notmatch 'Running') {
+            throw "Queue manager is not running. dspmq output: $dspmqOutput"
+          }
+
+          Write-Host "Queue manager is running."
+
+          # Test IBM MQ is functional: create a queue, verify it, delete it, verify it's gone.
+          # The runmqsc shim handles platform differences (bash on Linux, .ps1 on Windows).
+          # Piped stdin flows through to docker exec -i ibmmq runmqsc on both platforms.
+          Write-Host ""
+          Write-Host "Creating test queue TESTQ..."
+          $createOutput = ("DEFINE QLOCAL(TESTQ)`nDISPLAY QLOCAL(TESTQ)`nend" | runmqsc QM1) -join "`n"
+          Write-Host $createOutput
+
+          if ($createOutput -notmatch 'AMQ8409I') {
+            throw "Failed to create or display TESTQ. runmqsc output: $createOutput"
+          }
+          Write-Host "TESTQ created and verified."
+
+          Write-Host ""
+          Write-Host "Deleting test queue TESTQ..."
+          $deleteOutput = ("DELETE QLOCAL(TESTQ)`nDISPLAY QLOCAL(TESTQ)`nend" | runmqsc QM1) -join "`n"
+          # DISPLAY after DELETE fails with the expected AMQ8147E, so runmqsc exits non-zero.
+          $LASTEXITCODE = 0
+          Write-Host $deleteOutput
+
+          if ($deleteOutput -notmatch 'AMQ8147E') {
+            throw "TESTQ was not deleted or still exists. runmqsc output: $deleteOutput"
+          }
+          Write-Host "TESTQ deleted and verified gone."
+
+          Write-Host ""
+          Write-Host "Verifying queue created by init script..."
+          $initOutput = ("DISPLAY QLOCAL(INIT.TEST.QUEUE)`nend" | runmqsc QM1) -join "`n"
+
+          if ($initOutput -notmatch 'AMQ8409I') {
+            throw "Queue INIT.TEST.QUEUE from init script not found. runmqsc output: $initOutput"
+          }
+          Write-Host "INIT.TEST.QUEUE created by init script verified."
+
+          Write-Host ""
+          Write-Host "IBM MQ is fully functional — queue create/delete verified."
+      - name: Wait for build and verify
+        wait: [build, verify]
+      - name: Run tests
+        uses: Particular/run-tests-action@v1.7.0
