@@ -18,12 +18,11 @@ if ($runnerOs -eq "Linux") {
     docker rm $ContainerName 2>$null
 }
 elseif ($runnerOs -eq "Windows") {
-    $wslDistribution = $Env:WSL_DISTRIBUTION
-
     if ($ContainerName) {
         Write-Output "Removing WSL Docker container $ContainerName"
-        if ($wslDistribution) {
-            wsl.exe --distribution $wslDistribution --user root -- bash -c "docker rm --force ${ContainerName} 2>/dev/null || true"
+        if ($Env:WSL_DISTRIBUTION -and $Env:WSL_TOOLS_MODULE_PATH) {
+            Import-Module $Env:WSL_TOOLS_MODULE_PATH -Force
+            Invoke-Wsl -Command "docker rm --force $ContainerName 2>/dev/null || true"
         }
     }
 }
