@@ -118,53 +118,6 @@ if (-not $ready) {
     throw "IBM MQ did not become ready within 150s."
 }
 
-# Create dspmq and runmqsc shims on PATH so consumers and CI can call IBM MQ
-# commands the same way on both platforms - Linux (Docker directly) and
-# Windows (Docker inside WSL). Mirrors the sqlcmd shim pattern from
-# install-sql-server-action.
-#
-# On Windows the shims route through `bash -c` with each argument quoted:
-# wsl.exe re-parses argv as a shell command line, so an unquoted argument with
-# parentheses or other shell-special characters would cause a syntax error.
-Write-Output "Creating dspmq and runmqsc forwarding scripts"
-$shimDir = Join-Path $Env:RUNNER_TEMP "ibmmq-shim"
-New-Item -ItemType Directory -Force -Path $shimDir | Out-Null
-
-if ($runnerOs -eq "Linux") {
-    # Bash scripts - stdin flows naturally to docker exec -i
-    $dspmqPath = Join-Path $shimDir "dspmq"
-    Set-Content -Path $dspmqPath -Value "#!/bin/bash`ndocker exec $ContainerName dspmq `"$@`"" -Encoding ASCII
-    & chmod +x $dspmqPath
-
-    $runmqscPath = Join-Path $shimDir "runmqsc"
-    Set-Content -Path $runmqscPath -Value "#!/bin/bash`ndocker exec -i $ContainerName runmqsc `"$@`"" -Encoding ASCII
-    & chmod +x $runmqscPath
-}
-elseif ($runnerOs -eq "Windows") {
-    $dspmqPath = Join-Path $shimDir "dspmq.ps1"
-    Set-Content -Path $dspmqPath -Encoding ASCII -Value @"
-`$quoted = (`$args | ForEach-Object { "'" + (`$_ -replace "'", "'\''") + "'" }) -join ' '
-`$command = "docker exec $ContainerName dspmq `$quoted"
-wsl.exe --distribution `$env:WSL_DISTRIBUTION --user root -- bash -c `$command
-"@
-
-    $runmqscPath = Join-Path $shimDir "runmqsc.ps1"
-    Set-Content -Path $runmqscPath -Encoding ASCII -Value @"
-`$quoted = (`$args | ForEach-Object { "'" + (`$_ -replace "'", "'\''") + "'" }) -join ' '
-`$command = "docker exec -i $ContainerName runmqsc `$quoted"
-`$input | wsl.exe --distribution `$env:WSL_DISTRIBUTION --user root -- bash -c `$command
-"@
-}
-
-Write-Output "Adding IBM MQ shims to PATH"
-$shimDir | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8 -Append
-# GITHUB_PATH only affects subsequent steps; set in current process too.
-if ($runnerOs -eq "Linux") {
-    $Env:PATH = "$shimDir`:$Env:PATH"
-} else {
-    $Env:PATH = "$shimDir;$Env:PATH"
-}
-
 # Export the connection string. Uses the admin user with the generated password.
 # The channel (DEV.ADMIN.SVRCONN) and topic prefix (DEV) are the IBM MQ default
 # developer configuration values.
