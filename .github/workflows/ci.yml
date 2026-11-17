@@ -54,10 +54,33 @@ jobs:
             throw "Connection string does not match expected format."
           }
 
-          # Verify the queue manager is running via the dspmq shim.
+          # The same bash command runs on both OSes: through WSL on Windows, directly on Linux.
+          if ($Env:RUNNER_OS -eq 'Windows') {
+            Import-Module $Env:WSL_TOOLS_MODULE_PATH -Force
+          }
+
+          function Invoke-Bash {
+            param([string]$Command)
+
+            if ($Env:RUNNER_OS -eq 'Windows') {
+              Invoke-Wsl -Command $Command
+            }
+            else {
+              bash -c $Command
+            }
+          }
+
+          function Invoke-Mqsc {
+            param([string[]]$Commands)
+
+            $lines = ($Commands | ForEach-Object { "'$_'" }) -join ' '
+            Invoke-Bash "printf '%s\n' $lines | docker exec -i ibmmq runmqsc QM1"
+          }
+
+          # Verify the queue manager is running.
           # Join the output to a string — PowerShell captures command output as
           # an array, and an empty array is falsy, so -notmatch passes silently.
-          $dspmqOutput = (dspmq) -join "`n"
+          $dspmqOutput = (Invoke-Bash 'docker exec ibmmq dspmq') -join "`n"
           Write-Host "dspmq output: $dspmqOutput"
 
           if ($LASTEXITCODE -ne 0) {
@@ -71,11 +94,10 @@ jobs:
           Write-Host "Queue manager is running."
 
           # Test IBM MQ is functional: create a queue, verify it, delete it, verify it's gone.
-          # The runmqsc shim handles platform differences (bash on Linux, .ps1 on Windows).
-          # Piped stdin flows through to docker exec -i ibmmq runmqsc on both platforms.
+          # MQSC is piped into docker exec -i ibmmq runmqsc inside the bash command.
           Write-Host ""
           Write-Host "Creating test queue TESTQ..."
-          $createOutput = ("DEFINE QLOCAL(TESTQ)`nDISPLAY QLOCAL(TESTQ)`nend" | runmqsc QM1) -join "`n"
+          $createOutput = (Invoke-Mqsc 'DEFINE QLOCAL(TESTQ)', 'DISPLAY QLOCAL(TESTQ)', 'end') -join "`n"
           Write-Host $createOutput
 
           if ($createOutput -notmatch 'AMQ8409I') {
@@ -85,7 +107,7 @@ jobs:
 
           Write-Host ""
           Write-Host "Deleting test queue TESTQ..."
-          $deleteOutput = ("DELETE QLOCAL(TESTQ)`nDISPLAY QLOCAL(TESTQ)`nend" | runmqsc QM1) -join "`n"
+          $deleteOutput = (Invoke-Mqsc 'DELETE QLOCAL(TESTQ)', 'DISPLAY QLOCAL(TESTQ)', 'end') -join "`n"
           # DISPLAY after DELETE fails with the expected AMQ8147E, so runmqsc exits non-zero.
           $LASTEXITCODE = 0
           Write-Host $deleteOutput
@@ -97,7 +119,7 @@ jobs:
 
           Write-Host ""
           Write-Host "Verifying queue created by init script..."
-          $initOutput = ("DISPLAY QLOCAL(INIT.TEST.QUEUE)`nend" | runmqsc QM1) -join "`n"
+          $initOutput = (Invoke-Mqsc 'DISPLAY QLOCAL(INIT.TEST.QUEUE)', 'end') -join "`n"
 
           if ($initOutput -notmatch 'AMQ8409I') {
             throw "Queue INIT.TEST.QUEUE from init script not found. runmqsc output: $initOutput"

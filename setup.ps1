@@ -7,10 +7,10 @@ param (
 
 $ErrorActionPreference = 'Stop'
 
-# Require setup-wsl-action to have run first — it provisions WSL/Docker and exports
+# Require setup-wsl-action to have run first - it provisions WSL/Docker and exports
 # the WslTools module at WSL_TOOLS_MODULE_PATH.
 if (-not $Env:WSL_TOOLS_MODULE_PATH) {
-    throw "This action requires Particular/setup-wsl-action to run first — it provisions WSL/Docker and exports the WslTools module at WSL_TOOLS_MODULE_PATH."
+    throw "This action requires Particular/setup-wsl-action to run first - it provisions WSL/Docker and exports the WslTools module at WSL_TOOLS_MODULE_PATH."
 }
 Import-Module $Env:WSL_TOOLS_MODULE_PATH -Force
 
@@ -26,7 +26,7 @@ $runnerOs = $Env:RUNNER_OS ?? "Linux"
 $adminPassword = [guid]::NewGuid().ToString()
 Write-Output "::add-mask::$adminPassword"
 
-# Validate the image tag — it's user-controlled and interpolated into docker commands.
+# Validate the image tag - it's user-controlled and interpolated into docker commands.
 # Docker tags: max 128 chars, alphanumeric + _ . -, must start with alphanumeric or _.
 if ($ImageTag -notmatch '^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$') {
     throw "image-tag must be a valid Docker image tag (alphanumeric, underscore, period, hyphen; max 128 chars). Got: $ImageTag"
@@ -61,7 +61,7 @@ elseif ($runnerOs -eq "Windows") {
 
     Write-Output "WSL address: $ipAddress"
 
-    # Use array splatting to avoid WSL interop quoting issues — never pass
+    # Use array splatting to avoid WSL interop quoting issues - never pass
     # multi-line commands with backslash continuations through wsl.exe.
     $dockerArgs = @(
         "run", "--name", $ContainerName, "--detach", "--restart", "unless-stopped",
@@ -84,7 +84,7 @@ else {
     throw "$runnerOs not supported"
 }
 
-# Wait for IBM MQ to be ready. The dspmq command shows queue manager status —
+# Wait for IBM MQ to be ready. The dspmq command shows queue manager status -
 # but returns exit code 0 even when the status is "Starting", not "Running".
 # We must check the actual output for "Running", not just the exit code,
 # otherwise runmqsc will fail with "queue manager does not exist" because
@@ -118,53 +118,6 @@ if (-not $ready) {
     throw "IBM MQ did not become ready within 150s."
 }
 
-# Create dspmq and runmqsc shims on PATH so consumers and CI can call IBM MQ
-# commands the same way on both platforms — Linux (Docker directly) and
-# Windows (Docker inside WSL). Mirrors the sqlcmd shim pattern from
-# install-sql-server-action.
-#
-# On Windows the shims route through `bash -c` with each argument quoted:
-# wsl.exe re-parses argv as a shell command line, so an unquoted argument with
-# parentheses or other shell-special characters would cause a syntax error.
-Write-Output "Creating dspmq and runmqsc forwarding scripts"
-$shimDir = Join-Path $Env:RUNNER_TEMP "ibmmq-shim"
-New-Item -ItemType Directory -Force -Path $shimDir | Out-Null
-
-if ($runnerOs -eq "Linux") {
-    # Bash scripts — stdin flows naturally to docker exec -i
-    $dspmqPath = Join-Path $shimDir "dspmq"
-    Set-Content -Path $dspmqPath -Value "#!/bin/bash`ndocker exec $ContainerName dspmq `"$@`"" -Encoding ASCII
-    & chmod +x $dspmqPath
-
-    $runmqscPath = Join-Path $shimDir "runmqsc"
-    Set-Content -Path $runmqscPath -Value "#!/bin/bash`ndocker exec -i $ContainerName runmqsc `"$@`"" -Encoding ASCII
-    & chmod +x $runmqscPath
-}
-elseif ($runnerOs -eq "Windows") {
-    $dspmqPath = Join-Path $shimDir "dspmq.ps1"
-    Set-Content -Path $dspmqPath -Encoding ASCII -Value @"
-`$quoted = (`$args | ForEach-Object { "'" + (`$_ -replace "'", "'\''") + "'" }) -join ' '
-`$command = "docker exec $ContainerName dspmq `$quoted"
-wsl.exe --distribution `$env:WSL_DISTRIBUTION --user root -- bash -c `$command
-"@
-
-    $runmqscPath = Join-Path $shimDir "runmqsc.ps1"
-    Set-Content -Path $runmqscPath -Encoding ASCII -Value @"
-`$quoted = (`$args | ForEach-Object { "'" + (`$_ -replace "'", "'\''") + "'" }) -join ' '
-`$command = "docker exec -i $ContainerName runmqsc `$quoted"
-`$input | wsl.exe --distribution `$env:WSL_DISTRIBUTION --user root -- bash -c `$command
-"@
-}
-
-Write-Output "Adding IBM MQ shims to PATH"
-$shimDir | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8 -Append
-# GITHUB_PATH only affects subsequent steps; set in current process too.
-if ($runnerOs -eq "Linux") {
-    $Env:PATH = "$shimDir`:$Env:PATH"
-} else {
-    $Env:PATH = "$shimDir;$Env:PATH"
-}
-
 # Export the connection string. Uses the admin user with the generated password.
 # The channel (DEV.ADMIN.SVRCONN) and topic prefix (DEV) are the IBM MQ default
 # developer configuration values.
@@ -180,7 +133,7 @@ if ($InitScript) {
         throw "Init script not found: $InitScript"
     }
 
-    # Copy into the container via docker cp and run with bash — no stdin piping, so no CRLF.
+    # Copy into the container via docker cp and run with bash - no stdin piping, so no CRLF.
     # Normalize to LF first: scripts may be checked out with CRLF on Windows.
     $script = (Get-Content -LiteralPath $InitScript -Raw) -replace "`r`n", "`n"
     $hostScriptPath = Join-Path $Env:RUNNER_TEMP "init-script.sh"
