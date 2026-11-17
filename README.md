@@ -11,7 +11,7 @@ steps:
   - name: Checkout
     uses: actions/checkout@v7
   - name: Setup WSL
-    uses: Particular/setup-wsl-action@v1.1.0
+    uses: Particular/setup-wsl-action@v1.3.0
   - name: Setup IBM MQ
     uses: Particular/setup-ibmmq-action@v1.0.0 # Check if this is the latest version at https://github.com/Particular/setup-ibmmq-action/tags
     with:
@@ -72,7 +72,7 @@ steps:
       init-script: .github/workflows/setup-leastpriv-tests.sh
 ```
 
-On Windows runners the script is piped through WSL into the container, so the script itself works unchanged on both platforms — no `wsl.exe` branching required.
+On both platforms the script is copied into the container with `docker cp` and run there with bash (on Windows the `docker` calls go through WSL), so the script works unchanged and needs no `wsl.exe` branching.
 
 ## Cleanup
 
